@@ -53,7 +53,7 @@ impl Operation {
 
             // Check that there is enough room for the length.
             if *pos + 4 > bin_size {
-                return Err("Invalid string size for length!".to_string());
+                return Err("Invalid string size for length!".to_owned());
             }
 
             // Read length (4 bytes).
@@ -67,7 +67,7 @@ impl Operation {
             // Check that there is enough room for the value.
             let end_pos = *pos + length as usize;
             if end_pos > bin_size {
-                return Err("Invalid size for value.".to_string());
+                return Err("Invalid size for value.".to_owned());
             }
 
             // Read value.
@@ -75,7 +75,7 @@ impl Operation {
             let out = match String::from_utf8(value_bytes.to_vec()) {
                 Ok(str) => Ok(str),
                 Err(_) => {
-                    Err("Could not decode value utf8 bytes.".to_string())
+                    Err("Could not decode value utf8 bytes.".to_owned())
                 }
             };
             *pos = end_pos;
@@ -85,7 +85,7 @@ impl Operation {
 
             // Check that there is an additional byte to read.
             if *pos + 1 > bin_size {
-                return Err("Invalid size for u8!".to_string())
+                return Err("Invalid size for u8!".to_owned())
             }
 
             // Read u8 (I have no idea why it has to be done like this).
@@ -101,7 +101,7 @@ impl Operation {
         let id = match read_str(&bin, bin_size, &mut pos) {
             Ok(reply_id) => reply_id,
             Err(_) => {
-                return Err("Could not read reply ID!".to_string())
+                return Err("Could not read reply ID!".to_owned())
             }
         };
 
@@ -109,12 +109,12 @@ impl Operation {
         let op_type = match read_u8(&bin, bin_size, &mut pos) {
             Ok(v) => match OperationType::from_u8(v) {
                 None => {
-                    return Err("Invalid operation type!".to_string())
+                    return Err("Invalid operation type!".to_owned())
                 },
                 Some(op_type) => op_type
             }
             Err(_) => {
-                return Err("Could not read operation type!".to_string())
+                return Err("Could not read operation type!".to_owned())
             }
         };
 
@@ -122,11 +122,11 @@ impl Operation {
         let payload_count = match read_u8(&bin, bin_size, &mut pos) {
             Ok(payload_count) => payload_count,
             Err(_) => {
-                return Err("Could not read payload count!".to_string())
+                return Err("Could not read payload count!".to_owned())
             }
         };
         if payload_count > 2 {
-            return Err("There cannot be more than two payload values!".to_string())
+            return Err("There cannot be more than two payload values!".to_owned())
         }
 
         // 4. If there are payloads, read them.

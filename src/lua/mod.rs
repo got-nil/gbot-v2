@@ -91,7 +91,7 @@ pub fn run(payload: LuaPayload) -> LuaResult {
         Err(_) => {
             LuaResult {
                 success: false,
-                error_message: Some(String::from("Could not get realm!")),
+                error_message: Some("Could not get realm!".to_owned()),
                 output: None
             }
         }

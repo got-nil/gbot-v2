@@ -156,7 +156,7 @@ impl WebsocketClient {
                                 ws_writer
                                     .lock()
                                     .unwrap()
-                                    .send_message(&OwnedMessage::Text("Successfully queued operation.".to_string()))
+                                    .send_message(&OwnedMessage::Text("Successfully queued operation.".to_owned()))
                                     .unwrap_or_else(|_| eprintln!("Failed to send success reply"));
                             },
                             Err(e) => {

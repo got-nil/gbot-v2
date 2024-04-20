@@ -59,10 +59,10 @@ impl LuaReturnValue {
 impl Display for LuaReturnValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let v = match self {
-            LuaReturnValue::Bool(b) => if *b { "true" } else { "false" }.to_string(),
+            LuaReturnValue::Bool(b) => if *b { "true" } else { "false" }.to_owned(),
             LuaReturnValue::Number(f) => f.to_string(),
             LuaReturnValue::String(s) => s.clone(),
-            LuaReturnValue::Nil => String::from("nil")
+            LuaReturnValue::Nil => "nil".to_owned()
         };
         write!(f, "{}", v)
     }
