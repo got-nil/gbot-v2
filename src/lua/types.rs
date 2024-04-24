@@ -1,4 +1,5 @@
-use std::fmt::Display;
+use std::fmt;
+use std::fmt::{Display, Formatter};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug)]
@@ -65,6 +66,14 @@ impl Display for LuaReturnValue {
             LuaReturnValue::Nil => "nil".to_owned()
         };
         write!(f, "{}", v)
+    }
+}
+impl fmt::Debug for LuaReturnValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("LuaReturnValue")
+            .field("type", &self.to_uint())
+            .field("value", &self.to_string())
+            .finish()
     }
 }
 

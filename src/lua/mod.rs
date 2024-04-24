@@ -1,4 +1,5 @@
 pub mod types;
+pub mod fns;
 
 use std::ffi::CStr;
 use rglua::prelude::*;

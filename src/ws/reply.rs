@@ -1,3 +1,5 @@
+use std::fmt;
+use std::fmt::Formatter;
 use crate::lua::types::{LuaResult, LuaReturnValue};
 
 /*
@@ -8,22 +10,27 @@ use crate::lua::types::{LuaResult, LuaReturnValue};
         output_exists - 1 byte ( 0 / 1 )
 
         (ONLY IF output_exists = 1):
-            type_id - u32
-            value - .... (controlled by type)
+            count - u32
+
+            (FOR count):
+                type_id - u32
+                value - .... (controlled by type)
 
  */
 
 pub struct OperationReply {
     id: String,
     success: bool,
-    output: Option<Vec<LuaReturnValue>>
+    output: Option<Vec<LuaReturnValue>>,
+    error_message: Option<String>
 }
 impl OperationReply {
-    pub fn new(id: String, success: bool, output: Option<Vec<LuaReturnValue>>) -> OperationReply {
+    pub fn new(id: String, success: bool, output: Option<Vec<LuaReturnValue>>, error_message: Option<String>) -> OperationReply {
         OperationReply {
             id,
             success,
-            output
+            output,
+            error_message
         }
     }
 
@@ -49,22 +56,56 @@ impl OperationReply {
         // Write success state.
         add_bool(&mut encoded, self.success);
 
-        // Write output (where first byte specifies if it actually exists).
-        add_bool(&mut encoded, self.output.is_some());
-        if let Some(output) = &self.output {
+        // If unsuccessful, write the error message.
+        if !self.success {
 
-            // Write all LuaReturnValue's.
-            encoded.extend_from_slice(&(output.len() as u32).to_le_bytes());
-            for v in output {
-                v.write_binary(&mut encoded);
+            // Write error message.
+            add_bool(&mut encoded, self.error_message.is_some());
+            if let Some(error_message) = &self.error_message {
+                add_str(&mut encoded, error_message.as_str())
+            }
+
+        } else {
+
+            // Write output (where first byte specifies if it actually exists).
+            add_bool(&mut encoded, self.output.is_some());
+            if let Some(output) = &self.output {
+
+                // Write all LuaReturnValue's.
+                encoded.extend_from_slice(&(output.len() as u32).to_le_bytes());
+                for v in output {
+                    v.write_binary(&mut encoded);
+                }
             }
         }
 
         encoded
     }
 }
-impl From<LuaResult> for OperationReply {
-    fn from(result: LuaResult) -> Self {
-        return OperationReply::new(String::new(), result.success, result.output);
+impl From<(String, LuaResult)> for OperationReply {
+    fn from(data: (String, LuaResult)) -> Self {
+        return OperationReply::new(
+            data.0,
+            data.1.success,
+            data.1.output,
+            data.1.error_message
+        );
+    }
+}
+impl fmt::Debug for OperationReply {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut debug_struct = f.debug_struct("OperationReply");
+
+        // Add default fields.
+        debug_struct.field("id", &self.id)
+            .field("success", &self.success);
+
+        // Only add output fields if there are some.
+        if let Some(output) = &self.output {
+            for (i, value) in output.iter().enumerate() {
+                debug_struct.field(format!("output-{i}").as_str(), value);
+            }
+        }
+        debug_struct.finish()
     }
 }

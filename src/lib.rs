@@ -3,28 +3,24 @@ mod lua;
 mod ws;
 mod debug;
 
-use std::cell::OnceCell;
-use std::ffi::CString;
+use std::cell::RefCell;
 use rglua::prelude::*;
 use rglua::interface;
 use crate::ws::WebsocketClient;
 
 thread_local! {
-    pub static WEBSOCKET_CLIENT: OnceCell<Option<WebsocketClient>> = OnceCell::new();
+    pub static WEBSOCKET_CLIENT: RefCell<Option<WebsocketClient>> = RefCell::new(None);
 }
 
 // Run operation queue.
-fn run_queue() -> () {
-
-    // TODO: Reconnect websocket if its not alive.
-
+// This is called basically every frame, coming from the paint traverse.
+fn run_queue(state: Option<LuaState>) -> () {
     WEBSOCKET_CLIENT.with(|cell| {
-        if let Some(websocket) = cell.get() {
-            match websocket {
-                None => {}
-                Some(ws) => {
-                    ws.run_queue()
-                }
+        if let Some(websocket) = cell.borrow_mut().as_mut() {
+
+            // Run the websocket queue, and attempt reconnection if it fails (socket is dead).
+            if !websocket.run_queue(state) {
+                websocket.attempt_reconnection();
             }
         }
     });
@@ -33,7 +29,7 @@ fn run_queue() -> () {
 #[gmod_open]
 fn open(l: LuaState) -> Result<i32, interface::Error> {
 
-    // TODO: REMOVE DEBUG ATTACHMENTS.
+    #[cfg(feature = "debug")]
     debug::apply(l);
 
     // Attach detour hooks.
@@ -46,22 +42,14 @@ fn open(l: LuaState) -> Result<i32, interface::Error> {
     let mut websocket = WebsocketClient::new();
     let start_result = websocket.start();
     WEBSOCKET_CLIENT.with(|cell| {
-        match cell.set(Some(websocket)) {
-            Ok(_) => {}
-            Err(_) => {
-
-                // Usually we shouldn't panic, but if we can't store the websocket client then there is
-                // literally no way for operations to be passed to the game, so we might as well exit now.
-                // TODO: Return an interface Error instead!
-                panic!("Could not store WebsocketClient in OnceCell!");
-            }
-        }
+        let mut inner = cell.borrow_mut();
+        *inner = Some(websocket);
     });
 
     // Log initial websocket connection status.
     match start_result {
         Ok(_) => printgm!(l, "Successfully connected to websocket!"),
-        Err(_) => printgm!(l, "Failed to connect to websocket!")
+        Err(e) => printgm!(l, "Failed to connect to websocket: {e}")
     }
 
     Ok(0)

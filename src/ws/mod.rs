@@ -6,24 +6,30 @@ use std::{
     sync::{Arc, Mutex},
     thread
 };
+use std::time::{Duration, Instant};
+use rglua::lua::LuaState;
 use websocket::{client::ClientBuilder, message::OwnedMessage, sync::Client};
 use websocket::sync::Writer;
 use websocket::websocket_base::result::WebSocketResult;
+use crate::lua::fns::safe_log;
 use crate::ws::operation::Operation;
 
-// TODO: REIMPLEMENT LOGGING DIRECTLY TO THE MENU STATE.
+// How long to delay before allowing reconnection attempts after a failure.
+static RECONNECT_ATTEMPT_DURATION: Duration = Duration::from_secs(10);
 
 pub struct WebsocketClient {
-    writer: Option<Arc<Mutex<Writer<TcpStream>>>>,
     pub alive: Arc<Mutex<bool>>,
-    queue: Arc<Mutex<Vec<Operation>>>
+    writer: Option<Arc<Mutex<Writer<TcpStream>>>>,
+    queue: Arc<Mutex<Vec<Operation>>>,
+    last_connection_attempt: Option<Instant>
 }
 impl WebsocketClient {
     pub fn new() -> Self {
         Self {
-            writer: None,
             alive: Arc::new(Mutex::new(false)),
-            queue: Arc::new(Mutex::new(Vec::<Operation>::new()))
+            writer: None,
+            queue: Arc::new(Mutex::new(Vec::<Operation>::new())),
+            last_connection_attempt: None
         }
     }
 
@@ -74,19 +80,68 @@ impl WebsocketClient {
     }
 
     // Run every queued operation with a lua state. (then clear).
-    pub fn run_queue(&self) -> () {
+    pub fn run_queue(&self, state: Option<LuaState>) -> bool {
 
-        let mut queue = self.queue.lock().unwrap();
-        for operation in queue.iter_mut() {
+        // If the connection isn't alive, don't bother running operations since
+        // we can't actually send back any replies.
+        if !self.is_alive() {
+            safe_log(state, "Could not run queue as the connection is dead!");
+            return false;
+        }
 
-            // Run the operation, convert the reply to binary and send back.
-            let reply_binary = operation.run().to_binary();
-            match self.send(OwnedMessage::Binary(reply_binary)) {
-                Ok(_) => {}
-                Err(_) => {}
+        // Lock the queue.
+        let mut queue = match self.queue.lock() {
+            Ok(queue) => queue,
+            Err(_) => {
+                safe_log(state, "Could not acquire a lock for the operation queue!");
+                return true;
+            }
+        };
+
+        // Make sure the queue isn't empty.
+        if queue.len() == 0 {
+            safe_log(state, "The queue is empty!");
+            return true;
+        }
+
+        // Pop the first operation in queue.
+        let mut operation = queue.remove(0);
+        if state.is_some() {
+            safe_log(state, format!("{operation:?}").as_str());
+        }
+
+        // Get operation reply data.
+        let reply = operation.run();
+        if state.is_some() {
+            safe_log(state, format!("{reply:?}").as_str());
+        }
+        match self.send(OwnedMessage::Binary(reply.to_binary())) {
+            Ok(_) => {}
+            Err(_) => {
+                safe_log(state, "Failed to send operation reply!");
             }
         }
-        queue.clear();
+        return true;
+    }
+
+    // Attempt to reconnect to the websocket. Will only allow reconnection attempt every
+    // RECONNECT_ATTEMPT_DURATION, therefore it can be called any time run_queue fails.
+    pub fn attempt_reconnection(&mut self) -> () {
+
+        let now = Instant::now();
+
+        // Make sure the last attempt wasn't too recent.
+        if let Some(last_attempt) = self.last_connection_attempt {
+            let elapsed = now.duration_since(last_attempt);
+            if elapsed < RECONNECT_ATTEMPT_DURATION {
+                return;
+            }
+        }
+        self.last_connection_attempt = Some(now);
+
+        // Actually attempt the connection start.
+        // TODO: Add proper logging.
+        let _ = self.start();
     }
 
     // "Reset" the client, so it can get ready to handle a new connection.
@@ -107,7 +162,7 @@ impl WebsocketClient {
         self.reset();
 
         // Create client and connect.
-        let result = ClientBuilder::new("ws://127.0.0.1:8000")
+        let result = ClientBuilder::new("ws://127.0.0.1:8000/ws")
             .unwrap()
             .connect_insecure();
 
@@ -150,13 +205,17 @@ impl WebsocketClient {
 
                         match Operation::from_binary(bin) {
                             Ok(o) => {
+
+                                let id = o.id.clone();
                                 operation_queue.lock().unwrap().push(o);
 
                                 // TODO: Remove this too.
                                 ws_writer
                                     .lock()
                                     .unwrap()
-                                    .send_message(&OwnedMessage::Text("Successfully queued operation.".to_owned()))
+                                    .send_message(&OwnedMessage::Text(
+                                        format!("Successfully queued operation {}", id)
+                                    ))
                                     .unwrap_or_else(|_| eprintln!("Failed to send success reply"));
                             },
                             Err(e) => {

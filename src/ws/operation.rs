@@ -1,3 +1,5 @@
+use std::fmt;
+use std::fmt::Formatter;
 use std::process::exit;
 use crate::lua;
 use crate::lua::types::{LuaPayload, LuaReturnValue, Realm};
@@ -34,13 +36,20 @@ impl OperationType {
     }
 }
 
-#[derive(Debug)]
 pub struct Operation {
-    id: String,
+    pub id: String,
     op_type: OperationType,
     payloads: Vec<String>
 }
 impl Operation {
+
+    pub fn new(id: String, op_type: OperationType, payloads: Vec<String>) -> Self {
+        Operation {
+            id,
+            op_type,
+            payloads
+        }
+    }
 
     // Decode the packed binary operation data.
     pub fn from_binary(bin: Vec<u8>) -> Result<Self, String> {
@@ -80,7 +89,7 @@ impl Operation {
             };
             *pos = end_pos;
             out
-        };
+        }
         fn read_u8(bin: &[u8], bin_size: usize, pos: &mut usize) -> Result<u8, String> {
 
             // Check that there is an additional byte to read.
@@ -95,7 +104,7 @@ impl Operation {
             ]);
             *pos += 1;
             Ok(result)
-        };
+        }
 
         // 1. Read reply ID.
         let id = match read_str(&bin, bin_size, &mut pos) {
@@ -146,11 +155,7 @@ impl Operation {
 
         // Finally, return the constructed Operation.
         Ok(
-            Operation {
-                id,
-                op_type,
-                payloads
-            }
+            Operation::new(id, op_type, payloads)
         )
     }
 
@@ -158,11 +163,12 @@ impl Operation {
     pub fn run(&mut self) -> OperationReply {
 
         // Short constructor.
-        let replier = |success: bool, output: Option<Vec<LuaReturnValue>>| -> OperationReply {
+        let replier = |success: bool, output: Option<Vec<LuaReturnValue>>, error_message: Option<String>| -> OperationReply {
             OperationReply::new(
                 self.id.clone(),
                 success,
-                output
+                output,
+                error_message
             )
         };
 
@@ -183,19 +189,19 @@ impl Operation {
 
                 // There must be two payloads here. The realm identifier and the code.
                 if self.payloads.len() != 2 {
-                    return replier(false, None);
+                    return replier(false, None, Some("Missing required two payloads! (Realm, Code)".to_owned()));
                 }
 
                 // Read payload values.
                 let code = match self.payloads.pop() {
                     None => {
-                        return replier(false, None);
+                        return replier(false, None, Some("Could not pop payload!".to_owned()));
                     },
                     Some(code) => code
                 };
                 let realm = match self.payloads.pop() {
                     None => {
-                        return replier(false, None);
+                        return replier(false, None, Some("Could not pop realm!".to_owned()));
                     }
                     Some(realm) => match realm.as_str() {
                         "c" => Realm::Client,
@@ -211,16 +217,25 @@ impl Operation {
                 };
 
                 // Convert the LuaResult to an OperationReply.
-                OperationReply::from(
-                    lua::run(payload)
-                )
+                OperationReply::from((
+                    self.id.clone(), lua::run(payload)
+                ))
             },
 
             // Exit the game process.
             OperationType::ExitProcess => {
-                replier(true, None);
+                replier(true, None, None);
                 exit(1);
             }
         }
+    }
+}
+impl fmt::Debug for Operation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Operation")
+            .field("id", &self.id)
+            .field("type", &self.op_type)
+            .field("payloads", &self.payloads)
+            .finish()
     }
 }
