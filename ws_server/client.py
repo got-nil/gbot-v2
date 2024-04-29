@@ -6,7 +6,7 @@
 """
 
 import msgspec
-from typing import Annotated, List
+from typing import Annotated, Any, List, Tuple, Optional
 
 from identifiable_websocket import IdentifiableWebsocket
 from operations import OperationType, OperationReply, Operation, PendingOperation
@@ -15,26 +15,58 @@ from operations import OperationType, OperationReply, Operation, PendingOperatio
 class RequestMessage(msgspec.Struct):
     id: Annotated[str, msgspec.Meta(min_length=8, max_length=28)]  # Reply ID.
     op: OperationType  # Operation type.
-    target: Annotated[str, msgspec.Meta(min_length=8, max_length=28)]  # Target bot ID.
-    payloads: List[str]  # Payloads to send.
+    target: Annotated[str, msgspec.Meta(min_length=8, max_length=28)] | None = None  # Target bot ID.
+    payloads: List[str] | None = None  # Payloads to send.
 
 
 class ReplyMessage(msgspec.Struct):
     id: str | None  # Only optional if we fail when decoding.
     success: bool
-    output: str | None = None
+    output: Any = None
     error_message: str | None = None
 
 
 class Client(IdentifiableWebsocket):
 
-    async def dispatch_operation(self, request: RequestMessage) -> bool:
+    # Handle an operation that shouldn't be sent to a bot.
+    async def handle_server_operation(self, request: RequestMessage) -> Tuple[bool, Optional[str]]:
+
+        match request.op:
+            case OperationType.ListBots:
+
+                # Reply with all existing bot identifiers from container keys.
+                await self.send_reply_message(
+                    ReplyMessage(
+                        id=request.id,
+                        success=True,
+                        output=list(self.container.bots.keys())
+                    )
+                )
+                return True, None
+
+            case _:
+                return False, "Invalid/Unknown server operation!"
+
+    # Dispatch / Handle an operation request message.
+    async def dispatch_operation(self, request: RequestMessage) -> Tuple[bool, Optional[str]]:
+
+        # If it's not a bot enum, handle differently.
+        is_bot_enum, requires_payload = request.op.meta()
+        if not is_bot_enum:
+            return await self.handle_server_operation(request)
+
+        # If it's a bot operation, there must be a target.
+        if request.target is None:
+            return False, "Bot operations must include a target identifier!"
+
+        # If a payload is required, make sure it exists.
+        if requires_payload and request.payloads is None:
+            return False, "This operation requires payload(s)!"
 
         # Find the target bot from request "target".
         bot = self.container.bots.get(request.target)
         if bot is None:
-            self.log(f"Could not find target bot '{request.target}'!")
-            return False
+            return False, f"Could not find target bot '{request.target}'!"
 
         # Create a pending operation from the request message and send it to the bot.
         pending = PendingOperation(
@@ -45,7 +77,8 @@ class Client(IdentifiableWebsocket):
                 payloads=request.payloads
             )
         )
-        return await bot.send_operation(pending)
+        success = await bot.send_operation(pending)
+        return success, None if success else "Failed to send operation to target bot!"
 
     async def recv(self) -> None:
 
@@ -74,16 +107,22 @@ class Client(IdentifiableWebsocket):
                 continue
 
             # Dispatch the request message to the target bot.
-            success = await self.dispatch_operation(message)
-            self.log(("Successfully dispatched" if success else "Failed to dispatch") + f" RequestMessage '{message.id}' to '{message.target}' ({message.op}).")
+            success, err = await self.dispatch_operation(message)
+            self.log(
+                ("Successfully dispatched" if success else "Failed to dispatch") +
+                f" RequestMessage '{message.id}' " +
+                (f"to '{message.target}' " if message.target is not None else "") +
+                f"({message.op})."
+            )
 
             # If the dispatching was unsuccessful, send an error back since they won't get a normal reply.
             if not success:
+                self.log("Dispatch error: " + err)
                 await self.send_reply_message(
                     ReplyMessage(
                         id=message.id,
                         success=False,
-                        error_message="Failed to dispatch operation to requested bot!"
+                        error_message=err
                     )
                 )
 

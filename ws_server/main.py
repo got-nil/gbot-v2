@@ -1,5 +1,6 @@
+import random, string
 from sanic import Sanic, Request, Websocket
-from typing import Union, Tuple, Type, Literal
+from typing import Union, Tuple, Type
 
 from client import Client
 from bot import Bot
@@ -22,10 +23,12 @@ class Main:
     def validate_request(request: Request) -> Tuple[bool, str]:
 
         # Make sure there is an identifier.
-        # identifier = request.headers.get("X-Id")
-        identifier = "client00000000000"
+        identifier = request.headers.get("X-Id")
         if identifier is None:
-            return False, "Missing required identifier!"
+
+            # TODO: Remove this. This is just bad.
+            identifier = ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(20))
+            # return False, "Missing required identifier!"
 
         # The identifier must be at least 8 characters.
         if len(identifier) < 8:
@@ -39,6 +42,7 @@ class Main:
         # Validate the request.
         success, out = self.validate_request(request)
         if not success:
+            print("Invalid request: ", out)
             await ws.close(4001, out)
             return
 
@@ -51,6 +55,7 @@ class Main:
             return
 
         # Start receiver loop.
+        obj.log("Starting receiver!")
         await obj.recv()
 
     async def route_ws_bot(self, request: Request, ws: Websocket) -> None:

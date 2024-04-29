@@ -1,28 +1,41 @@
 from enum import IntEnum
-from typing import Optional, List, Any
+from typing import TYPE_CHECKING, Optional, List, Any, Tuple
 from dataclasses import dataclass
 
 from binary.encoder import Encoder
 from binary.decoder import Decoder
 
+if TYPE_CHECKING:
+    from bot import Bot
+
 
 class OperationType(IntEnum):
-    Error = 0
+
+    # Bot enums.
     ConnectToServer = 1
     DisconnectFromServer = 2
     ExecuteLua = 3
     ExitProcess = 4
 
-    @classmethod
-    def from_str(cls, string: str) -> Optional["OperationType"]:
-        lookup = {
-            "Error": cls.Error,
-            "ConnectToServer": cls.ConnectToServer,
-            "DisconnectFromServer": cls.DisconnectFromServer,
-            "ExecuteLua": cls.ExecuteLua,
-            "ExitProcess": cls.ExitProcess
-        }
-        return lookup.get(string)
+    # Server enums.
+    ListBots = 5
+
+    # IsBotOperation, RequiresPayload
+    def meta(self) -> Tuple[bool, bool]:
+        return 1 <= self.value <= 4, self.value in [1, 2, 4]
+
+    # Called when an operation type is sent, with the bot that did it.
+    # This is only for operations that send data to the bot and should also
+    # have some immediate effect here too (such as ExitProcess closing socket).
+    # Returns if the Operation should be cached as pending.
+    async def sent(self, bot: "Bot") -> bool:
+        match self.value:
+            case 4:
+                await bot.close()
+                return False
+
+            case _:
+                return True
 
 
 @dataclass
@@ -64,7 +77,7 @@ class OperationReply:
 
         decoder = Decoder(buffer)
         reply = {
-            "id": decoder.read_string(),
+            "reply_id": decoder.read_string(),
             "success": decoder.read_bool(),
 
             # Default values.

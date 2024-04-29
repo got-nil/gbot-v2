@@ -20,7 +20,7 @@ class IdentifiableWebsocket:
         self.closed = False
 
     def log(self, string: str) -> None:
-        print(self.identifier, " -> ", string)
+        print(f"[{type(self).__name__}]", self.identifier, "->", string)
 
     async def check_closed(self) -> bool:
 
@@ -35,6 +35,7 @@ class IdentifiableWebsocket:
         if self.closed:
             return
 
+        self.log("Closing!")
         await self.websocket.close()
         self.closed = True
 

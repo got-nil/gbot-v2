@@ -71,5 +71,9 @@ class Bot(IdentifiableWebsocket):
         await self.websocket.send(
             op.operation.to_bytes()
         )
-        self.pending_operations[op.operation.reply_id] = op
+
+        # Allow the operation type to control if the operation is actually marked as pending now.
+        if await op.operation.type.sent(self):
+            self.pending_operations[op.operation.reply_id] = op
+
         return True
