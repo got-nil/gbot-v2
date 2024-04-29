@@ -1,7 +1,10 @@
 use std::fmt;
 use std::fmt::Formatter;
 use std::process::exit;
+use rglua::cstr;
+use rglua::lua::{lua_call, lua_getglobal, lua_pushstring, LuaState};
 use crate::lua;
+use crate::lua::fns::lua_push_string;
 use crate::lua::types::{LuaPayload, LuaReturnValue, Realm};
 use crate::ws::reply::OperationReply;
 
@@ -176,7 +179,35 @@ impl Operation {
 
             // Join a game server.
             OperationType::ConnectToServer => {
-                unimplemented!()
+
+                // There must be one payload (the server IP).
+                if self.payloads.len() != 1 {
+                    return replier(false, None, Some("Missing required payload! (Server IP)".to_owned()));
+                }
+
+                // Get server IP from payload.
+                let server_ip = match self.payloads.pop() {
+                    Some(server_ip) => server_ip,
+                    None => {
+                        return replier(false, None, Some("Could not get valid server IP payload!".to_owned()));
+                    }
+                };
+
+                // Get the menu state.
+                let l = match lua::get_state(Realm::Menu) {
+                    Ok(l) => l,
+                    Err(_) => {
+                        return replier(false, None, Some("Could not get menu state to JoinServer!".to_owned()))
+                    }
+                };
+
+                // Actually call the join server function and reply.
+                lua_getglobal(l, cstr!("JoinServer"));
+                if let Err(_) = lua_push_string(l, server_ip) {
+                    return replier(false, None, Some("Could not push server IP payload to stack!".to_owned()));
+                }
+                lua_call(l, 1, 0);
+                replier(true, None, None)
             },
 
             // Disconnect from the game server.
@@ -210,13 +241,11 @@ impl Operation {
                     }
                 };
 
-                // TODO: Allow the realm to be controlled upstream.
+                // Run, and convert the LuaResult to an OperationReply.
                 let payload = LuaPayload {
                     realm,
                     code
                 };
-
-                // Convert the LuaResult to an OperationReply.
                 OperationReply::from((
                     self.id.clone(), lua::run(payload)
                 ))

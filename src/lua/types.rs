@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use crate::lua::table::LuaTable;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug)]
@@ -22,7 +23,8 @@ pub enum LuaReturnValue {
     Bool(bool),
     Number(f64),
     String(String),
-    Nil
+    Nil,
+    Table(Box<LuaTable>),
 }
 impl LuaReturnValue {
     fn to_uint(&self) -> u8 {
@@ -30,7 +32,8 @@ impl LuaReturnValue {
             LuaReturnValue::Bool(_) => 1u8,
             LuaReturnValue::Number(_) => 2u8,
             LuaReturnValue::String(_) => 3u8,
-            LuaReturnValue::Nil => 4u8
+            LuaReturnValue::Nil => 4u8,
+            LuaReturnValue::Table(_) => 5u8
         }
     }
     pub fn write_binary(&self, encoded: &mut Vec<u8>) -> () {
@@ -53,7 +56,10 @@ impl LuaReturnValue {
                 encoded.extend_from_slice(&(utf8_bytes.len() as u32).to_le_bytes());
                 encoded.extend_from_slice(utf8_bytes);
             }
-            LuaReturnValue::Nil => {}
+            LuaReturnValue::Nil => {},
+            LuaReturnValue::Table(t) => {
+                unimplemented!();
+            }
         }
     }
 }
@@ -63,7 +69,8 @@ impl Display for LuaReturnValue {
             LuaReturnValue::Bool(b) => if *b { "true" } else { "false" }.to_owned(),
             LuaReturnValue::Number(f) => f.to_string(),
             LuaReturnValue::String(s) => s.clone(),
-            LuaReturnValue::Nil => "nil".to_owned()
+            LuaReturnValue::Nil => "nil".to_owned(),
+            LuaReturnValue::Table(t) => t.to_string()
         };
         write!(f, "{}", v)
     }

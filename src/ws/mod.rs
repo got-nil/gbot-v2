@@ -9,9 +9,11 @@ use std::{
 use std::time::{Duration, Instant};
 use rglua::lua::LuaState;
 use websocket::{client::ClientBuilder, message::OwnedMessage, sync::Client};
+use websocket::header::Headers;
 use websocket::sync::Writer;
 use websocket::websocket_base::result::WebSocketResult;
 use crate::lua::fns::safe_log;
+use crate::WEBSOCKET_IDENTIFIER;
 use crate::ws::operation::Operation;
 
 // How long to delay before allowing reconnection attempts after a failure.
@@ -19,16 +21,16 @@ static RECONNECT_ATTEMPT_DURATION: Duration = Duration::from_secs(10);
 
 pub struct WebsocketClient {
     pub alive: Arc<Mutex<bool>>,
+    pub queue: Arc<Mutex<Vec<Operation>>>,
     writer: Option<Arc<Mutex<Writer<TcpStream>>>>,
-    queue: Arc<Mutex<Vec<Operation>>>,
     last_connection_attempt: Option<Instant>
 }
 impl WebsocketClient {
     pub fn new() -> Self {
         Self {
             alive: Arc::new(Mutex::new(false)),
-            writer: None,
             queue: Arc::new(Mutex::new(Vec::<Operation>::new())),
+            writer: None,
             last_connection_attempt: None
         }
     }
@@ -161,9 +163,14 @@ impl WebsocketClient {
         // Reset the client before connecting.
         self.reset();
 
+        // Create headers set with bot identifier.
+        let mut headers = Headers::new();
+        headers.set_raw("X-Id", vec![WEBSOCKET_IDENTIFIER.with(|id| id.clone()).as_bytes().to_vec()]);
+
         // Create client and connect.
-        let result = ClientBuilder::new("ws://127.0.0.1:8000/ws")
+        let result = ClientBuilder::new("ws://127.0.0.1:8000/ws/bot")
             .unwrap()
+            .custom_headers(&headers)
             .connect_insecure();
 
         match result {
@@ -204,20 +211,7 @@ impl WebsocketClient {
                     OwnedMessage::Binary(bin) => {
 
                         match Operation::from_binary(bin) {
-                            Ok(o) => {
-
-                                let id = o.id.clone();
-                                operation_queue.lock().unwrap().push(o);
-
-                                // TODO: Remove this too.
-                                ws_writer
-                                    .lock()
-                                    .unwrap()
-                                    .send_message(&OwnedMessage::Text(
-                                        format!("Successfully queued operation {}", id)
-                                    ))
-                                    .unwrap_or_else(|_| eprintln!("Failed to send success reply"));
-                            },
+                            Ok(o) => operation_queue.lock().unwrap().push(o),
                             Err(e) => {
 
                                 // TODO: Remove this? We just shouldn't be sending invalid operations anyway.

@@ -54,6 +54,7 @@ extern "fastcall" fn paint_traverse_h(
 	}
 
 	// Run operations queue.
+	#[cfg(not(feature="debug"))]
 	run_queue(None);
 }
 

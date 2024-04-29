@@ -1,15 +1,43 @@
 mod hooks;
 mod lua;
 mod ws;
+
+#[cfg(feature="debug")]
 mod debug;
 
 use std::cell::RefCell;
+use std::time::SystemTime;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
 use rglua::prelude::*;
 use rglua::interface;
 use crate::ws::WebsocketClient;
 
+// Generate an identifier with the current UNIX time and a random string.
+// TODO: The websocket should probably assign the bot an identifier instead of this.
+fn generate_identifier() -> String {
+
+    // Get the current unix time, or an empty string if it fails.
+    let mut unix = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(duration) => duration.as_secs().to_string(),
+        Err(_) => {
+            String::new()
+        }
+    };
+    let random: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(28 - unix.len())
+            .map(char::from)
+            .collect();
+
+    // Push the random string to end of unix and return.
+    unix.push_str(&random);
+    unix
+}
+
 thread_local! {
     pub static WEBSOCKET_CLIENT: RefCell<Option<WebsocketClient>> = RefCell::new(None);
+    pub static WEBSOCKET_IDENTIFIER: String = generate_identifier();
 }
 
 // Run operation queue.

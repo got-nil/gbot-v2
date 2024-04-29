@@ -1,9 +1,11 @@
 pub mod types;
 pub mod fns;
+pub mod table;
 
 use std::ffi::CStr;
 use rglua::prelude::*;
 use crate::hooks::LUAL_LOADBUFFERX_H;
+use crate::lua::fns::lua_get_return_value;
 use crate::lua::types::{LuaPayload, LuaResult, LuaReturnValue, Realm};
 
 unsafe fn stack_get_error(state: LuaState) -> String {
@@ -64,14 +66,8 @@ pub fn run(payload: LuaPayload) -> LuaResult {
             // Go through the stack backwards.
             for _ in 1..=top {
 
-                // Get the value (as return value type) from stack & pop.
-                let ret = match lua_type(state, -1) {
-                    TBOOLEAN => Some(LuaReturnValue::Bool(lua_toboolean(state, -1) == 1)),
-                    TNUMBER => Some(LuaReturnValue::Number(lua_tonumber(state, -1))),
-                    TSTRING => Some(LuaReturnValue::String(rstr!(lua_tostring(state, -1)).to_string())),
-                    TNIL => Some(LuaReturnValue::Nil),
-                    _ => None
-                };
+                // Get return value from top of stack.
+                let ret = lua_get_return_value(state, -1);
                 lua_pop(state, 1);
 
                 // Make sure there's actually a valid return value.
