@@ -3,3 +3,5 @@ Cargo.lock
 rglua
 .idea
 test_server
+venv
+__pycache__

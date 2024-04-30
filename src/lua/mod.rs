@@ -5,7 +5,7 @@ pub mod table;
 use std::ffi::CStr;
 use rglua::prelude::*;
 use crate::hooks::LUAL_LOADBUFFERX_H;
-use crate::lua::fns::lua_get_return_value;
+use crate::lua::fns::{log_dump_stack, lua_get_return_value};
 use crate::lua::types::{LuaPayload, LuaResult, LuaReturnValue, Realm};
 
 unsafe fn stack_get_error(state: LuaState) -> String {
@@ -62,6 +62,8 @@ pub fn run(payload: LuaPayload) -> LuaResult {
             // Get stack size and create output vec.
             let top = lua_gettop(state);
             let mut out = Vec::<LuaReturnValue>::new();
+
+            log_dump_stack(state);
 
             // Go through the stack backwards.
             for _ in 1..=top {

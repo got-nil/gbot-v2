@@ -57,14 +57,12 @@ impl LuaReturnValue {
                 encoded.extend_from_slice(utf8_bytes);
             }
             LuaReturnValue::Nil => {},
-            LuaReturnValue::Table(t) => {
-                unimplemented!();
-            }
+            LuaReturnValue::Table(t) => unimplemented!()
         }
     }
 }
 impl Display for LuaReturnValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let v = match self {
             LuaReturnValue::Bool(b) => if *b { "true" } else { "false" }.to_owned(),
             LuaReturnValue::Number(f) => f.to_string(),

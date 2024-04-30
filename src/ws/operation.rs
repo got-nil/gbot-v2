@@ -2,7 +2,7 @@ use std::fmt;
 use std::fmt::Formatter;
 use std::process::exit;
 use rglua::cstr;
-use rglua::lua::{lua_call, lua_getglobal, lua_pushstring, LuaState};
+use rglua::lua::{lua_call, lua_getglobal};
 use crate::lua;
 use crate::lua::fns::lua_push_string;
 use crate::lua::types::{LuaPayload, LuaReturnValue, Realm};

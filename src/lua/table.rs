@@ -1,7 +1,7 @@
+use std::ffi::c_int;
 use std::fmt::{Display, Formatter};
 use rglua::lua::LuaState;
-use rglua::util::dump_stack;
-use crate::lua::fns::safe_log;
+use crate::lua::fns::log_dump_stack;
 use crate::lua::types::LuaReturnValue;
 
 pub struct LuaTable {
@@ -10,9 +10,8 @@ pub struct LuaTable {
 }
 impl LuaTable {
 
-    pub fn read_table(state: LuaState) -> Self {
+    pub fn read_table(state: LuaState, idx: c_int) -> Self {
 
-        // TODO: Actually read the table from stack.
         unimplemented!();
 
         LuaTable {

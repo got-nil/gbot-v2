@@ -1,7 +1,6 @@
 use rglua::interface::Panel;
 use rglua::prelude::*;
 use crate::hooks::lazy::lazy_detour;
-use crate::run_queue;
 
 pub mod lazy;
 
