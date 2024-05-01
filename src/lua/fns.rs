@@ -45,7 +45,7 @@ pub fn lua_get_return_value(state: LuaState, idx: c_int) -> Option<LuaReturnValu
         TNUMBER => Some(LuaReturnValue::Number(lua_tonumber(state, idx))),
         TSTRING => Some(LuaReturnValue::String(rstr!(lua_tostring(state, idx)).to_string())),
         TNIL => Some(LuaReturnValue::Nil),
-        TTABLE => Some(LuaReturnValue::Table(Box::new(LuaTable::read_table(state, idx)))),
+        TTABLE => Some(LuaReturnValue::Table(Box::new(LuaTable::read_table(state)))),
         _ => None
     }
 }
