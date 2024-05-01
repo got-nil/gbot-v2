@@ -1,5 +1,6 @@
 pub mod operation;
 pub mod reply;
+pub mod binary;
 
 use std::{
     net::TcpStream,
@@ -14,6 +15,7 @@ use websocket::sync::Writer;
 use websocket::websocket_base::result::WebSocketResult;
 use crate::lua::fns::safe_log;
 use crate::WEBSOCKET_IDENTIFIER;
+use crate::ws::binary::{BinaryBuffer, BinaryWriter};
 use crate::ws::operation::Operation;
 
 // How long to delay before allowing reconnection attempts after a failure.
@@ -108,21 +110,24 @@ impl WebsocketClient {
 
         // Pop the first operation in queue.
         let mut operation = queue.remove(0);
-        if state.is_some() {
-            safe_log(state, format!("{operation:?}").as_str());
-        }
+        safe_log(state, format!("{operation:?}").as_str());
 
-        // Get operation reply data.
+        // Run operation reply.
         let reply = operation.run();
-        if state.is_some() {
-            safe_log(state, format!("{reply:?}").as_str());
-        }
-        match self.send(OwnedMessage::Binary(reply.to_binary())) {
-            Ok(_) => {}
-            Err(_) => {
-                safe_log(state, "Failed to send operation reply!");
-            }
-        }
+        safe_log(state, format!("{reply:?}").as_str());
+
+        // Serialize the reply and send it back to server.
+        let mut buffer = BinaryBuffer::new();
+        match reply.write_binary(&mut buffer) {
+            Ok(_) => match self.send(OwnedMessage::Binary(buffer.into())) {
+                Ok(_) => safe_log(state, "Sent operation reply!"),
+                Err(_) => safe_log(state, "Failed to send operation reply!")
+            },
+
+            // TODO: If the reply can't be serialized we should still
+            //  return some error response instead of nothing.
+            Err(e) => safe_log(state, format!("Could not serialize OperationReply with error: {}!", e).as_str())
+        };
         return true;
     }
 

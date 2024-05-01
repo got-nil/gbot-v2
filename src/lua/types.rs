@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use crate::lua::table::LuaTable;
+use crate::ws::binary::{BinaryBuffer, BinaryWriter};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug)]
@@ -36,41 +37,38 @@ impl LuaReturnValue {
             LuaReturnValue::Table(_) => 5u8
         }
     }
-    pub fn write_binary(&self, encoded: &mut Vec<u8>) -> () {
-
-        // Write the value type.
-        encoded.extend_from_slice(
-            &self.to_uint().to_le_bytes()
-        );
-
-        // Actually write the value.
-        match self {
-            LuaReturnValue::Bool(b) => encoded.push(if *b { 0x01 } else { 0x00 }),
-            LuaReturnValue::Number(f) => encoded.extend_from_slice(&f.to_le_bytes()),
-            LuaReturnValue::String(s) => {
-
-                // Convert the String to utf8 bytes.
-                let utf8_bytes = s.as_bytes();
-
-                // Write the string size and bytes.
-                encoded.extend_from_slice(&(utf8_bytes.len() as u32).to_le_bytes());
-                encoded.extend_from_slice(utf8_bytes);
-            }
-            LuaReturnValue::Nil => {},
-            LuaReturnValue::Table(t) => unimplemented!()
-        }
-    }
 }
 impl Display for LuaReturnValue {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let v = match self {
             LuaReturnValue::Bool(b) => if *b { "true" } else { "false" }.to_owned(),
             LuaReturnValue::Number(f) => f.to_string(),
-            LuaReturnValue::String(s) => s.clone(),
+            LuaReturnValue::String(s) => format!("\"{}\"", s.clone()),
             LuaReturnValue::Nil => "nil".to_owned(),
             LuaReturnValue::Table(t) => t.to_string()
         };
         write!(f, "{}", v)
+    }
+}
+impl BinaryWriter for LuaReturnValue {
+    fn write_binary(&self, buffer: &mut BinaryBuffer) -> Result<(), &str> {
+
+        // Write the value type.
+        buffer.write_u8(self.to_uint());
+
+        // Actually write the value.
+        match self {
+            LuaReturnValue::Bool(b) => buffer.write_bool(*b),
+            LuaReturnValue::Number(f) => buffer.write_f64(*f),
+            LuaReturnValue::String(s) => buffer.write_str(s.as_str()),
+            LuaReturnValue::Nil => {},
+            LuaReturnValue::Table(t) => {
+                if let Err(e) =  t.write_binary(buffer) {
+                    return Err(e);
+                }
+            }
+        }
+        Ok(())
     }
 }
 impl fmt::Debug for LuaReturnValue {

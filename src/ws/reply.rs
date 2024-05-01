@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Formatter;
 use crate::lua::types::{LuaResult, LuaReturnValue};
+use crate::ws::binary::{BinaryBuffer, BinaryWriter};
 
 /*
 
@@ -33,53 +34,41 @@ impl OperationReply {
             error_message
         }
     }
-
-    // Convert the reply to binary.
-    pub fn to_binary(&self) -> Vec<u8> {
-
-        let mut encoded: Vec<u8> = Vec::new();
-        let add_str = |encoded: &mut Vec<u8>, v: &str| -> () {
-
-            let utf8_bytes = v.as_bytes();
-            let length = utf8_bytes.len() as u32;
-
-            encoded.extend_from_slice(&length.to_le_bytes()); // String size
-            encoded.extend_from_slice(utf8_bytes); // String value
-        };
-        let add_bool = |encoded: &mut Vec<u8>, v: bool| -> () {
-            encoded.push(if v { 0x01 } else { 0x00 });
-        };
+}
+impl BinaryWriter for OperationReply {
+    fn write_binary(&self, buffer: &mut BinaryBuffer) -> Result<(), &str> {
 
         // Write reply ID.
-        add_str(&mut encoded, &self.id.as_str());
+        buffer.write_str(&self.id.as_str());
 
         // Write success state.
-        add_bool(&mut encoded, self.success);
+        buffer.write_bool(self.success);
 
         // If unsuccessful, write the error message.
         if !self.success {
 
             // Write error message.
-            add_bool(&mut encoded, self.error_message.is_some());
+            buffer.write_bool(self.error_message.is_some());
             if let Some(error_message) = &self.error_message {
-                add_str(&mut encoded, error_message.as_str())
+                buffer.write_str(error_message.as_str());
             }
 
         } else {
 
             // Write output (where first byte specifies if it actually exists).
-            add_bool(&mut encoded, self.output.is_some());
+            buffer.write_bool(self.output.is_some());
             if let Some(output) = &self.output {
 
                 // Write all LuaReturnValue's.
-                encoded.extend_from_slice(&(output.len() as u32).to_le_bytes());
+                buffer.write_u32(output.len() as u32);
                 for v in output {
-                    v.write_binary(&mut encoded);
+                    if let Err(e) = v.write_binary(buffer) {
+                        return Err(e)
+                    }
                 }
             }
         }
-
-        encoded
+        Ok(())
     }
 }
 impl From<(String, LuaResult)> for OperationReply {
