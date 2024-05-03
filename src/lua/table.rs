@@ -10,11 +10,11 @@ use crate::ws::binary::{BinaryBuffer, BinaryWriter};
           still must be cleared afterwards since we're reading sequentially.
  */
 
-struct LuaTableKeyValue {
+struct LuaTableItem {
     key: LuaReturnValue,
     value: LuaReturnValue
 }
-impl BinaryWriter for LuaTableKeyValue {
+impl BinaryWriter for LuaTableItem {
     fn write_binary(&self, buffer: &mut BinaryBuffer) -> Result<(), &str> {
         if self.key.write_binary(buffer).is_err() ||
            self.value.write_binary(buffer).is_err()
@@ -24,14 +24,14 @@ impl BinaryWriter for LuaTableKeyValue {
         Ok(())
     }
 }
-impl Display for LuaTableKeyValue {
+impl Display for LuaTableItem {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}: {}", self.key.to_string(), self.value.to_string())
     }
 }
 
 pub struct LuaTable {
-    items: Vec<LuaTableKeyValue>
+    items: Vec<LuaTableItem>
 }
 impl LuaTable {
 
@@ -40,7 +40,7 @@ impl LuaTable {
         // Required for table traversal.
         lua_pushnil(state);
 
-        let mut items = Vec::<LuaTableKeyValue>::new();
+        let mut items = Vec::<LuaTableItem>::new();
         while lua_next(state, -2) != 0 {
 
             // Read key and value return value types.
@@ -50,7 +50,7 @@ impl LuaTable {
             // If there is a valid key and value, add the KeyValue pair to items.
             if k.is_some() && v.is_some() {
                 items.push(
-                    LuaTableKeyValue {
+                    LuaTableItem {
                         key: k.unwrap(),
                         value: v.unwrap(),
                     }

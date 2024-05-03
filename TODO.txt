@@ -1,0 +1,9 @@
+
+Implement:
+    - ConnectToServer
+    - DisconnectFromServer
+    - Error responses in state?
+
+TO FIX:
+    - Add IsAlive test function to make sure the websocket state is being set correctly on reset.
+    - Queue is not updating seemingly??
