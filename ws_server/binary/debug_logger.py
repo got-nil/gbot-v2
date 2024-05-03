@@ -1,7 +1,7 @@
 
 class DebugLogger:
 
-    DEBUG: bool = True
+    DEBUG: bool = False
 
     def debug(self, *args) -> None:
         if not self.DEBUG:
