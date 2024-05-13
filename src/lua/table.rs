@@ -43,16 +43,15 @@ impl LuaTable {
         let mut items = Vec::<LuaTableItem>::new();
         while lua_next(state, -2) != 0 {
 
-            // Read key and value return value types.
-            let k = lua_get_return_value(state, -2);
-            let v = lua_get_return_value(state, -1);
+            // Read table key. It must be valid.
+            if let Some(k) = lua_get_return_value(state, -2) {
 
-            // If there is a valid key and value, add the KeyValue pair to items.
-            if k.is_some() && v.is_some() {
+                // Read value. If it's invalid, default to nil.
+                let v = lua_get_return_value(state, -1).unwrap_or_else(|| LuaReturnValue::Nil);
                 items.push(
                     LuaTableItem {
-                        key: k.unwrap(),
-                        value: v.unwrap(),
+                        key: k,
+                        value: v
                     }
                 );
             }
